@@ -196,7 +196,7 @@ class SimulationGenerator:
                 include_zero_vector=with_direct_beam,
             )
             phase_vectors = []
-            for rot in rotate.to_matrix():
+            for rot in rotate:
                 # Calculate the reciprocal lattice vectors that intersect the Ewald sphere.
                 (
                     intersected_vectors,
@@ -335,7 +335,7 @@ class SimulationGenerator:
     def get_intersecting_reflections(
         self,
         recip: ReciprocalLatticeVector,
-        rot: np.ndarray,
+        rot: Rotation,
         wavelength: float,
         max_excitation_error: float,
         shape_factor_width: float = None,
@@ -348,7 +348,8 @@ class SimulationGenerator:
         recip
             The reciprocal lattice vectors to rotate.
         rot
-            The rotation matrix to apply to the reciprocal lattice vectors.
+            The rotation to apply to the reciprocal lattice vectors.
+            Orix conventions apply, i.e. "lab2crystal".
         wavelength
             The wavelength of the electrons in Angstroms.
         max_excitation_error
@@ -361,13 +362,14 @@ class SimulationGenerator:
             control. If not set will be set equal to max_excitation_error.
         """
         initial_hkl = recip.hkl
-        rotated_vectors = recip.rotate_from_matrix(rot)
+        # To ease calculations, we transform the reciprocal lattice vectors rather than the electron beam.
+        # Therefore, we need to invert the rotation, as it normally transforms the beam (lab2crystal).
+        rotated_vectors = (~rot * recip.to_miller()).data
 
         if with_direct_beam:
-            rotated_vectors = np.vstack([rotated_vectors.data, [0, 0, 0]])
+            rotated_vectors = np.vstack([rotated_vectors, [0, 0, 0]])
             initial_hkl = np.vstack([initial_hkl, [0, 0, 0]])
-        else:
-            rotated_vectors = rotated_vectors.data
+
         # Identify the excitation errors of all points (distance from point to Ewald sphere)
         r_sphere = 1 / wavelength
         r_spot = np.sqrt(np.sum(np.square(rotated_vectors[:, :2]), axis=1))
